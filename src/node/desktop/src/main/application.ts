@@ -45,6 +45,7 @@ import {
 } from './utils';
 import { WindowTracker } from './window-tracker';
 import { configureSatelliteWindow, configureSecondaryWindow, focusedWebContents } from './window-utils';
+import { Client, Server } from 'net-ipc';
 
 /**
  * The RStudio application
@@ -60,6 +61,8 @@ export class Application implements AppState {
   sessionStartDelaySeconds = 0;
   sessionEarlyExitCode = 0;
   pendingWindows = new Array<PendingWindow>();
+  server?: Server;
+  client?: Client;
 
   appLaunch?: ApplicationLaunch;
   sessionLauncher?: SessionLauncher;
@@ -103,11 +106,33 @@ export class Application implements AppState {
 
     initializeSharedSecret();
     this.registerAppEvents();
+    this.initializeInstance();
 
     // allow users to supply extra command-line arguments for Chromium
     augmentCommandLineArguments();
 
     return run();
+  }
+
+  private initializeInstance() {
+    const hasInstanceLock = app.requestSingleInstanceLock();
+
+    const options = { path: 'rstudio' };
+    if (hasInstanceLock) {
+      this.server = new Server({ path: 'rstudio' });
+      this.server.start().catch((error) => logger().logError(error));
+      this.server.on('message', (data) => {
+        console.log('IPC message for server:', data);
+        logger().logDebug('IPC message for server: ' + data);
+      });
+    } else {
+      this.client = new Client(options);
+      this.client.connect({ path: 'rstudio' }).catch((error) => logger().logError(error));
+      this.client.on('message', (data) => {
+        console.log('IPC message for client:', data);
+        logger().logDebug('IPC message for client: ' + data + ' ' + process.pid);
+      });
+    }
   }
 
   private registerAppEvents() {
@@ -142,8 +167,15 @@ export class Application implements AppState {
         .catch((error: unknown) => logger().logError(error));
     });
 
+    // // workaround and should be replaced by inter-process communication to assign a new primary instance
+    // app.on('browser-window-focus', () => {
+    //   // attempt to be the new primary instance if the primary instance exited
+    //   app.requestSingleInstanceLock();
+    // });
+
     app.on('second-instance', (_event, argv) => {
       logger().logDebug(`second-instance event: ARGS ${argv}`);
+
       // for files, open in the existing instance
       this.argsManager.setUnswitchedArgs(argv);
       if (!this.argsManager.getProjectFileArg())

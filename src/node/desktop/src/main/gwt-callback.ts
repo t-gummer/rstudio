@@ -122,6 +122,8 @@ export class GwtCallback extends EventEmitter {
         focusOwner: boolean,
       ) => {
         console.log('desktop_get_open_file_name');
+        appState().server?.emit('message', `hello ${process.pid}`);
+        appState().client?.emit('message', `hello ${process.pid}`);
         const openDialogOptions: OpenDialogOptions = {
           title: caption,
           defaultPath: resolveAliasedPath(dir),

@@ -13,6 +13,7 @@
  *
  */
 
+import { ChildProcess } from 'child_process';
 import { DesktopBrowserWindow } from './desktop-browser-window';
 
 /**
